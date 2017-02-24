@@ -1,0 +1,16 @@
+.tail {
+    display: none;
+}
+
+.log .line-selected .tail {
+    display: inline;
+}
+
+.diagram {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    display: none;
+}
+
+.ui-dialog { z-index: 2000 !important ;}
