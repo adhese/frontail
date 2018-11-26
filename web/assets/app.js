@@ -101,13 +101,46 @@ window.App = (function app(window, document) {
   };
 
   /**
+   * Set _filterValue from URL parameter `filter`
+   *
+   * @function
+   * @private
+   */
+  var _setFilterValueFromURL = function(filterInput, uri) {
+    var _url = new URL(uri);
+    var _filterValueFromURL = _url.searchParams.get('filter');
+    if (typeof _filterValueFromURL !== 'undefined' && _filterValueFromURL !== null) {
+      _filterValue = _filterValueFromURL;
+      filterInput.value = _filterValue; // eslint-disable-line
+    }
+  };
+
+  /**
+   * Set parameter `filter` in URL
+   *
+   * @function
+   * @private
+   */
+  var _setFilterParam = function(value, uri) {
+    var _url = new URL(uri);
+    var _params = new URLSearchParams(_url.search.slice(1));
+    if (value === '') {
+      _params.delete('filter');
+    } else {
+      _params.set('filter', value);
+    }
+    _url.search = _params.toString();
+    window.history.replaceState(null, document.title, _url.toString());
+  };
+
+  /**
    * @return {Boolean}
    * @private
    */
   var _isScrolledBottom = function() {
     var currentScroll = document.documentElement.scrollTop || document.body.scrollTop;
     var totalHeight = document.body.offsetHeight;
-    var clientHeight = document.documentElement.clientHeight;
+    var clientHeight = document.documentElement.clientHeight; // eslint-disable-line
     return totalHeight <= currentScroll + clientHeight;
   };
 
@@ -129,11 +162,8 @@ window.App = (function app(window, document) {
       return;
     }
 
-    _newLinesCount += 1;
-
-    if (_newLinesCount > 99) {
-      Tinycon.setBubble(99);
-    } else {
+    if (_newLinesCount < 99) {
+      _newLinesCount += 1;
       Tinycon.setBubble(_newLinesCount);
     }
   };
@@ -143,20 +173,18 @@ window.App = (function app(window, document) {
    * @private
    */
   var _highlightWord = function(line) {
-    if (_highlightConfig) {
-      if (_highlightConfig.words) {
-        for (var wordCheck in _highlightConfig.words) { // eslint-disable-line
-          if (_highlightConfig.words.hasOwnProperty(wordCheck)) { // eslint-disable-line
-            line = line.replace( // eslint-disable-line
-              wordCheck,
-              '<span style="' + _highlightConfig.words[wordCheck] + '">' + wordCheck + '</span>'
-            );
-          }
-        }
-      }
+    var output = line;
+
+    if (_highlightConfig && _highlightConfig.words) {
+      Object.keys(_highlightConfig.words).forEach((wordCheck) => {
+        output = line.replace(
+          wordCheck,
+          '<span style="' + _highlightConfig.words[wordCheck] + '">' + wordCheck + '</span>'
+        );
+      });
     }
 
-    return line;
+    return output;
   };
 
   /**
@@ -164,14 +192,12 @@ window.App = (function app(window, document) {
    * @private
    */
   var _highlightLine = function(line, container) {
-    if (_highlightConfig) {
-      if (_highlightConfig.lines) {
-        for (var lineCheck in _highlightConfig.lines) { // eslint-disable-line
-          if (line.indexOf(lineCheck) !== -1) { // eslint-disable-line
-            container.setAttribute('style', _highlightConfig.lines[lineCheck]);
-          }
+    if (_highlightConfig && _highlightConfig.lines) {
+      Object.keys(_highlightConfig.lines).forEach((lineCheck) => {
+        if (line.indexOf(lineCheck) !== -1) {
+          container.setAttribute('style', _highlightConfig.lines[lineCheck]);
         }
-      }
+      });
     }
 
     return container;
@@ -193,6 +219,8 @@ window.App = (function app(window, document) {
       _topbar = opts.topbar;
       _body = opts.body;
 
+      _setFilterValueFromURL(_filterInput, window.location.toString());
+
       // Filter input bind
       _filterInput.addEventListener('keyup', function(e) {
         // ESC
@@ -202,17 +230,26 @@ window.App = (function app(window, document) {
         } else {
           _filterValue = this.value;
         }
+        _setFilterParam(_filterValue, window.location.toString());
         _filterLogs();
       });
 
       // Favicon counter bind
-      window.addEventListener('blur', function() {
-        _isWindowFocused = false;
-      }, true);
-      window.addEventListener('focus', function() {
-        _isWindowFocused = true;
-        _faviconReset();
-      }, true);
+      window.addEventListener(
+        'blur',
+        function() {
+          _isWindowFocused = false;
+        },
+        true
+      );
+      window.addEventListener(
+        'focus',
+        function() {
+          _isWindowFocused = true;
+          _faviconReset();
+        },
+        true
+      );
 
       // socket.io init
       _socket = opts.socket;
@@ -274,6 +311,6 @@ window.App = (function app(window, document) {
       }
 
       _updateFaviconCounter();
-    },
+    }
   };
 }(window, document));

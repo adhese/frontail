@@ -1,17 +1,23 @@
 'use strict';
 
-const connectBuilder = require('../lib/connect_builder');
 const request = require('supertest');
 const path = require('path');
+const connectBuilder = require('../lib/connect_builder');
 
 describe('connectBuilder', () => {
   it('should build connect app', () => {
-    connectBuilder().build().should.have.property('use');
-    connectBuilder().build().should.have.property('listen');
+    connectBuilder('/')
+      .build()
+      .should.have.property('use');
+    connectBuilder()
+      .build()
+      .should.have.property('listen');
   });
 
   it('should build app requiring authorized user', (done) => {
-    const app = connectBuilder().authorize('user', 'pass').build();
+    const app = connectBuilder('/')
+      .authorize('user', 'pass')
+      .build();
 
     request(app)
       .get('/')
@@ -20,7 +26,9 @@ describe('connectBuilder', () => {
   });
 
   it('should build app allowing user to login', (done) => {
-    const app = connectBuilder().authorize('user', 'pass').build();
+    const app = connectBuilder('/')
+      .authorize('user', 'pass')
+      .build();
     app.use((req, res) => {
       res.end('secret!');
     });
@@ -32,18 +40,22 @@ describe('connectBuilder', () => {
   });
 
   it('should build app that setup session', (done) => {
-    const app = connectBuilder().session('secret', 'sessionkey').build();
+    const app = connectBuilder('/')
+      .session('secret')
+      .build();
     app.use((req, res) => {
       res.end();
     });
 
     request(app)
       .get('/')
-      .expect('set-cookie', /^sessionkey/, done);
+      .expect('set-cookie', /^connect.sid/, done);
   });
 
   it('should build app that serve static files', (done) => {
-    const app = connectBuilder().static(path.join(__dirname, 'fixtures')).build();
+    const app = connectBuilder('/')
+      .static(path.join(__dirname, 'fixtures'))
+      .build();
 
     request(app)
       .get('/foo')
@@ -51,7 +63,9 @@ describe('connectBuilder', () => {
   });
 
   it('should build app that serve index file', (done) => {
-    const app = connectBuilder().index(path.join(__dirname, 'fixtures/index'), '/testfile').build();
+    const app = connectBuilder('/')
+      .index(path.join(__dirname, 'fixtures/index'), '/testfile')
+      .build();
 
     request(app)
       .get('/')
@@ -59,8 +73,19 @@ describe('connectBuilder', () => {
       .expect('Content-Type', 'text/html', done);
   });
 
+  it('should build app that serve index file on specified path', (done) => {
+    const app = connectBuilder('/test')
+      .index(path.join(__dirname, 'fixtures/index'), '/testfile')
+      .build();
+
+    request(app)
+      .get('/test')
+      .expect(200)
+      .expect('Content-Type', 'text/html', done);
+  });
+
   it('should build app that replace index title', (done) => {
-    const app = connectBuilder()
+    const app = connectBuilder('/')
       .index(path.join(__dirname, 'fixtures/index_with_title'), '/testfile')
       .build();
 
@@ -70,7 +95,7 @@ describe('connectBuilder', () => {
   });
 
   it('should build app that sets socket.io namespace based on files', (done) => {
-    const app = connectBuilder()
+    const app = connectBuilder('/')
       .index(path.join(__dirname, 'fixtures/index_with_ns'), '/testfile', 'ns', 'dark')
       .build();
 
@@ -80,7 +105,7 @@ describe('connectBuilder', () => {
   });
 
   it('should build app that sets theme', (done) => {
-    const app = connectBuilder()
+    const app = connectBuilder('/')
       .index(path.join(__dirname, '/fixtures/index_with_theme'), '/testfile', 'ns', 'dark')
       .build();
 
@@ -89,11 +114,11 @@ describe('connectBuilder', () => {
       .expect(
         '<head><title>/testfile</title><link href="dark.css" rel="stylesheet" type="text/css"/></head>',
         done
-    );
+      );
   });
 
   it('should build app that sets default theme', (done) => {
-    const app = connectBuilder()
+    const app = connectBuilder('/')
       .index(path.join(__dirname, '/fixtures/index_with_theme'), '/testfile')
       .build();
 
@@ -102,6 +127,6 @@ describe('connectBuilder', () => {
       .expect(
         '<head><title>/testfile</title><link href="default.css" rel="stylesheet" type="text/css"/></head>',
         done
-    );
+      );
   });
 });
