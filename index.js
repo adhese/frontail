@@ -1,15 +1,18 @@
 'use strict';
 
-const connect = require('connect');
-const cookieParser = require('cookie');
+const cookie = require('cookie');
+const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
 const path = require('path');
-const socketio = require('socket.io');
+const SocketIO = require('socket.io');
+const fs = require('fs');
+const untildify = require('untildify');
 const tail = require('./lib/tail');
 const connectBuilder = require('./lib/connect_builder');
 const program = require('./lib/options_parser');
 const serverBuilder = require('./lib/server_builder');
 const daemonize = require('./lib/daemonize');
+const usageStats = require('./lib/stats');
 
 /**
  * Parse args
@@ -21,32 +24,42 @@ if (program.args.length === 0) {
 }
 
 /**
+ * Init usage statistics
+ */
+const stats = usageStats(!program.disableUsageStats);
+stats.track('runtime', 'init');
+stats.time('runtime', 'runtime');
+
+/**
  * Validate params
  */
 const doAuthorization = !!(program.user && program.password);
 const doSecure = !!(program.key && program.certificate);
 const sessionSecret = String(+new Date()) + Math.random();
-const sessionKey = 'sid';
 const files = program.args.join(' ');
-const filesNamespace = crypto.createHash('md5').update(files).digest('hex');
+const filesNamespace = crypto
+  .createHash('md5')
+  .update(files)
+  .digest('hex');
+const urlPath = program.urlPath.replace(/\/$/, ''); // remove trailing slash
 
 if (program.daemonize) {
   daemonize(__filename, program, {
     doAuthorization,
-    doSecure,
+    doSecure
   });
 } else {
   /**
    * HTTP(s) server setup
    */
-  const appBuilder = connectBuilder();
+  const appBuilder = connectBuilder(urlPath);
   if (doAuthorization) {
-    appBuilder.session(sessionSecret, sessionKey);
+    appBuilder.session(sessionSecret);
     appBuilder.authorize(program.user, program.password);
   }
   appBuilder
-    .static(path.join(__dirname, 'lib/web/assets'))
-    .index(path.join(__dirname, 'lib/web/index.html'), files, filesNamespace, program.theme);
+    .static(path.join(__dirname, 'web/assets'))
+    .index(path.join(__dirname, 'web/index.html'), files, filesNamespace, program.theme);
 
   const builder = serverBuilder();
   if (doSecure) {
@@ -61,16 +74,19 @@ if (program.daemonize) {
   /**
    * socket.io setup
    */
-  const io = socketio.listen(server, {
-    log: false,
-  });
+  const io = new SocketIO({ path: path.join(urlPath, '/socket.io') });
+  io.attach(server);
 
   if (doAuthorization) {
     io.use((socket, next) => {
       const handshakeData = socket.request;
       if (handshakeData.headers.cookie) {
-        const cookie = cookieParser.parse(handshakeData.headers.cookie);
-        const sessionId = connect.utils.parseSignedCookie(cookie[sessionKey], sessionSecret);
+        const cookies = cookie.parse(handshakeData.headers.cookie);
+        const sessionIdEncoded = cookies['connect.sid'];
+        if (!sessionIdEncoded) {
+          return next(new Error('Session cookie not provided'), false);
+        }
+        const sessionId = cookieParser.signedCookie(sessionIdEncoded, sessionSecret);
         if (sessionId) {
           return next(null);
         }
@@ -86,14 +102,26 @@ if (program.daemonize) {
    */
   let highlightConfig;
   if (program.uiHighlight) {
-    highlightConfig = require(path.resolve(__dirname, program.uiHighlightPreset)); // eslint-disable-line
+    let presetPath;
+
+    if (!program.uiHighlightPreset) {
+      presetPath = path.join(__dirname, 'preset/default.json');
+    } else {
+      presetPath = path.resolve(untildify(program.uiHighlightPreset));
+    }
+
+    if (fs.existsSync(presetPath)) {
+      highlightConfig = JSON.parse(fs.readFileSync(presetPath));
+    } else {
+      throw new Error(`Preset file ${presetPath} doesn't exists`);
+    }
   }
 
   /**
    * When connected send starting data
    */
   const tailer = tail(program.args, {
-    buffer: program.number,
+    buffer: program.number
   });
 
   const filesSocket = io.of(`/${filesNamespace}`).on('connection', (socket) => {
@@ -123,10 +151,13 @@ if (program.daemonize) {
     filesSocket.emit('line', line);
   });
 
+  stats.track('runtime', 'started');
+
   /**
    * Handle signals
    */
   const cleanExit = () => {
+    stats.timeEnd('runtime', 'runtime');
     process.exit();
   };
   process.on('SIGINT', cleanExit);
