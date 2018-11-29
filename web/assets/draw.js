@@ -32,7 +32,12 @@ var extractMarketName = function(line) {
     var jsonEnd = line.lastIndexOf("}");
     var json = JSON.parse(line.substring(jsonStart, jsonEnd + 1));
     var id = json.id;
-    return id.slice(0, -("-7dc9556a-b09b-4d7b-914d-3435bd7128c0".length)).replace("-", "_");
+    var marketName = id.slice(0, -("-7dc9556a-b09b-4d7b-914d-3435bd7128c0".length));
+    return marketToLabel(marketName);
+};
+
+var marketToLabel = function(market) {
+    return market.replace("-", "_");
 };
 
 var getChart = function(auctionId) {
@@ -48,8 +53,8 @@ var getChart = function(auctionId) {
             if (line.indexOf('Auction processing started') >= 0) {
                 var slotName = extractBetween(line, "Auction processing started: ", ":");
                 chart.push("Title: Auction on " + slotName);
-                chart.push('Browser->Gateway: Request');
-                chart.push("Gateway->ADSERVER: Request");
+                chart.push('Browser->Gateway:');
+                chart.push("Gateway->ADSERVER:");
             } else if (line.indexOf('Adserver response part received') >= 0) {
                 var duration = extractBetween(line, "(took PT", ")");
 
@@ -57,13 +62,13 @@ var getChart = function(auctionId) {
                 chart.push("ADSERVER->Gateway: Response");
             } else if (line.indexOf('Market request ready') >= 0) {
                 var market = extractMarketName(line);
-                chart.push("Gateway->" + market + ": Request");
+                chart.push("Gateway->" + market + ":");
             } else if (line.indexOf('Market response received') >= 0) {
                 var duration = extractBetween(line, "(took PT", ")");
-                var market = extractMarketName(line);
+                var market = extractBetween(line, "Market response received: ", ": ");
 
                 chart.push("Note left of Browser: " + duration);
-                chart.push(market + "->Gateway: Response");
+                chart.push(marketToLabel(market) + "->Gateway:");
             } else if (line.indexOf('Adserver bid received') >= 0) {
                 var amount = extractAmount(line);
 
@@ -76,7 +81,7 @@ var getChart = function(auctionId) {
                 var duration = extractBetween(line, "(all took PT", ")");
 
                 chart.push("Note left of Browser: " + duration);
-                chart.push("Gateway->Browser: Response");
+                chart.push("Gateway->Browser:");
             }
             else if (line.indexOf(binLogPrefix) >= 0) {
                 var idx = line.indexOf(binLogPrefix);
@@ -90,7 +95,8 @@ var getChart = function(auctionId) {
 };
 
 var diagram = $('<div/>', {
-    id: 'diagram'
+    id: 'diagram',
+    padding: 0
 });
 
 var draw = function(auctionId) {
@@ -98,10 +104,26 @@ var draw = function(auctionId) {
     var chart = getChart(auctionId);
     var diagramData = Diagram.parse(chart.join('\n'));
     diagram.dialog({
-        minWidth: 800,
-        minHeight: 600
+        create: function(event, ui) {
+            $(event.target).parent().css('position', 'fixed');
+        },
+        resizeStop: function(event, ui) {
+            var position = [(Math.floor(ui.position.left) - $(window).scrollLeft()),
+                         (Math.floor(ui.position.top) - $(window).scrollTop())];
+            $(event.target).parent().css('position', 'fixed');
+            $(dlg).dialog('option','position',position);
+        }
     });
     diagramData.drawSVG("diagram", { theme: 'simple' });
+  
+    setTimeout(function() {
+        var svg = $("#diagram svg");
+        var w = svg.width();
+        var h = svg.height();
+        svg.attr("viewBox", "0 0 " + w + " " + h);
+        svg.attr("width", "100%");
+        svg.attr("height", "100%");
+    }, 50);
 };
 
 var auctionUuid = new RegExp('.* ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) .*');
