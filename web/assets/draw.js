@@ -59,7 +59,7 @@ var getChart = function(auctionId) {
                 var duration = extractBetween(line, "(took PT", ")");
 
                 chart.push("Note left of Browser: " + duration);
-                chart.push("ADSERVER->Gateway: Response");
+                chart.push("ADSERVER->Gateway:");
             } else if (line.indexOf('Market request ready') >= 0) {
                 var market = extractMarketName(line);
                 chart.push("Gateway->" + market + ":");
