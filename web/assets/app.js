@@ -299,13 +299,19 @@ window.App = (function app(window, document) {
           let div = document.createElement('div');
           div.className = 'line';
           div = _highlightLine(data, div);
-          div.addEventListener('click', function click() {
-              if (this.className.indexOf('selected') === -1) {
-                  this.className = 'line-selected';
-              } else {
-                  this.className = 'line';
+
+          var isDragging = false;
+          div.addEventListener("mousedown", function() { isDragging = false; }, false);
+          div.addEventListener("mousemove", function() { isDragging = true; }, false);
+          div.addEventListener("mouseup", function() {
+              if (!isDragging) {
+                  if (this.className.indexOf('selected') === -1) {
+                      this.className = 'line-selected';
+                  } else {
+                      this.className = 'line';
+                  }
               }
-          });
+          }, false);
 
           const idx = Math.min(170, data.length);
           const dataHead = data.substr(0, idx);
