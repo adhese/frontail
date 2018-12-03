@@ -303,7 +303,7 @@ window.App = (function app(window, document) {
           var isDragging = false;
           div.addEventListener("mousedown", function() { isDragging = false; }, false);
           div.addEventListener("mousemove", function() { isDragging = true; }, false);
-          div.addEventListener("mouseup", function() {
+          div.addEventListener("click", function() {
               if (!isDragging) {
                   if (this.className.indexOf('selected') === -1) {
                       this.className = 'line-selected';
