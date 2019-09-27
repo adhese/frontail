@@ -88,6 +88,10 @@ var getChart = function(auctionId) {
                 var jsonStr = line.substring(idx + binLogPrefix.length);
                 var log = JSON.parse(jsonStr);
                 chart.push("Note over Browser: " + (log.currency == 'EUR' ? "€" : "$") + roundAmount(log.amount));
+                if(!log.jerliciaAuctionable) {
+                    var el = chart.indexOf('ADSERVER->Gateway:');
+                    chart[el] += ' Non Auctionable';
+                }
             }
         });
 
