@@ -1,4 +1,4 @@
-var extractBetween = function(line, start, end) {
+var extractBetween = function (line, start, end) {
     var startIdx = line.indexOf(start);
     if (startIdx < 0) {
         return "";
@@ -12,11 +12,11 @@ var extractBetween = function(line, start, end) {
 };
 
 
-var roundAmount = function(str) {
+var roundAmount = function (str) {
     return parseFloat(str).toPrecision(3);
 };
 
-var extractAmount = function(line) {
+var extractAmount = function (line) {
     if (line.indexOf('Optional[') < 0) {
         return "EMPTY";
     }
@@ -27,7 +27,7 @@ var extractAmount = function(line) {
     return "€" + roundAmount(extractBetween(line, "EUR ", " "));
 };
 
-var extractMarketName = function(line) {
+var extractMarketName = function (line) {
     var jsonStart = line.indexOf("{");
     var jsonEnd = line.lastIndexOf("}");
     var json = JSON.parse(line.substring(jsonStart, jsonEnd + 1));
@@ -36,19 +36,27 @@ var extractMarketName = function(line) {
     return marketToLabel(marketName);
 };
 
-var marketToLabel = function(market) {
+var extractJSON = function (line) {
+    var jsonStart = line.indexOf("{");
+    var jsonEnd = line.lastIndexOf("}");
+    var json = JSON.parse(line.substring(jsonStart, jsonEnd + 1));
+    console.log(json);
+    return json;
+};
+
+var marketToLabel = function (market) {
     return market.replace("-", "_");
 };
 
-var getChart = function(auctionId) {
+var getChart = function (auctionId) {
     var chart = [];
 
     var binLogPrefix = "Binary log submit: ";
 
     $('*[class^="line"]')
-        .map(function() { return $(this).text(); })
-        .filter(function() { return this.indexOf(auctionId) >= 0; })
-        .each(function() {
+        .map(function () { return $(this).text(); })
+        .filter(function () { return this.indexOf(auctionId) >= 0; })
+        .each(function () {
             var line = this;
             if (line.indexOf('Auction processing started') >= 0) {
                 var slotName = extractBetween(line, "Auction processing started: ", ":");
@@ -94,29 +102,103 @@ var getChart = function(auctionId) {
     return chart;
 };
 
+var jsonPathToValue = function(jsonData, path) {
+    if (!(jsonData instanceof Object) || typeof (path) === "undefined") {
+        throw "Not valid argument:jsonData:" + jsonData + ", path:" + path;
+    }
+    path = path.replace(/\[(\w+)\]/g, '.$1'); // convert indexes to properties
+    path = path.replace(/^\./, ''); // strip a leading dot
+    var pathArray = path.split('.');
+    for (var i = 0, n = pathArray.length; i < n; ++i) {
+        var key = pathArray[i];
+        if (key in jsonData) {
+            if (jsonData[key] !== null) {
+                jsonData = jsonData[key];
+            } else {
+                return null;
+            }
+        } else {
+            return "n/a";
+        }
+    }
+    return jsonData;
+};
+
+var getTableInfo = function (auctionId) {
+    var mytable = $('<table></table>').attr({ id: "basicTable", class: "table table-bordered" });
+    var headerRows = ["id", "device.ip", "device.language", "device.ua", "regs.ext.gdpr", "user.ext.consent", "user.id", "user.buyeruid", "imp[0].ext.rp.target", "user.ext.rp.target", "site.ext.key_val", "user.ext.keyvalue" ]
+    var tableHead = $('<thead></thead>');
+    var tableHeadRow = $('<tr></tr>');
+    $.each(headerRows, function (key, val) {
+        tableHeadRow.append("<th>" + val + "</th>")
+    })
+    tableHead.append(tableHeadRow);
+    mytable.append(tableHead);
+    var tbl_body = document.createElement("tbody");
+    $('*[class^="line"]')
+        .map(function () { return $(this).text(); })
+        .filter(function () { return this.indexOf(auctionId) >= 0; })
+        .each(function () {
+            var line = this;
+            if (line.indexOf('Market request ready') >= 0) {
+                var marketInfo = extractJSON(line);
+                var marketName = extractMarketName(line);
+                marketInfo.market = marketName;
+                var tbl_row = tbl_body.insertRow();
+                $.each(headerRows, function (key, val) {
+                    var cell = tbl_row.insertCell();
+                    var data = jsonPathToValue(marketInfo, val);
+                    if (data) {
+                        console.log(marketInfo[val])
+                        cell.appendChild(document.createTextNode(JSON.stringify(data)));
+                    }
+                })
+            }
+        });
+    mytable.append(tbl_body);
+    return mytable;
+};
+
+var tabs = $('<div id="tabs"><ul><li><a href="#diagram">Diagram</a></li><li><a href="#infoTable">Table</a></li></ul></div>', {
+    id: 'tabs',
+    padding: 0
+});
+
+
 var diagram = $('<div/>', {
     id: 'diagram',
     padding: 0
 });
 
-var draw = function(auctionId) {
+var infoTable = $('<div/>', {
+    id: 'infoTable',
+    padding: 0
+});
+
+var draw = function (auctionId) {
     diagram.empty();
+    infoTable.empty();
     var chart = getChart(auctionId);
     var diagramData = Diagram.parse(chart.join('\n'));
-    diagram.dialog({
-        create: function(event, ui) {
+    infoTable.append(getTableInfo(auctionId))
+    tabs.append(diagram)
+    tabs.append(infoTable)
+    tabs.tabs();
+    tabs.dialog({
+        create: function (event, ui) {
             $(event.target).parent().css('position', 'fixed');
         },
-        resizeStop: function(event, ui) {
-            var position = [(Math.floor(ui.position.left) - $(window).scrollLeft()),
-                         (Math.floor(ui.position.top) - $(window).scrollTop())];
+        resizeStop: function (event, ui) {
+            var position = [
+                (Math.floor(ui.position.left) - $(window).scrollLeft()),
+                (Math.floor(ui.position.top) - $(window).scrollTop())
+            ];
             $(event.target).parent().css('position', 'fixed');
-            $(dlg).dialog('option','position',position);
         }
     });
     diagramData.drawSVG("diagram", { theme: 'simple' });
-  
-    setTimeout(function() {
+
+    setTimeout(function () {
         var svg = $("#diagram svg");
         var w = svg.width();
         var h = svg.height();
@@ -130,9 +212,9 @@ var auctionUuid = new RegExp('.* ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 
 var domScanTimer = null;
 
-var domScan = function() {
+var domScan = function () {
     domScanTimer = null;
-    $(".head:not(.processed)").each(function() {
+    $(".head:not(.processed)").each(function () {
         var head = $(this);
         head.addClass('processed');
         var oldHtml = head.html();
@@ -142,7 +224,7 @@ var domScan = function() {
             var linkId = "draw_" + auctionId;
             var newHtml = oldHtml.replace(auctionId, "<a href='#' id='" + linkId + "'>" + auctionId + "</a>");
             head.html(newHtml);
-            head.find("#" + linkId).on('click', function() {
+            head.find("#" + linkId).on('click', function () {
                 draw(auctionId);
                 return false;
             });
@@ -150,13 +232,14 @@ var domScan = function() {
     });
 };
 
-$(document).ready(function() {
+$(document).ready(function () {
     $("body").append(diagram);
 });
 
-$(document).on("DOMNodeInserted", '.line', function() {
+$(document).on("DOMNodeInserted", '.line', function () {
     if (!domScanTimer) {
         domScanTimer = setTimeout(domScan, 2000);
     }
 });
+
 
