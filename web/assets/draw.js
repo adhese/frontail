@@ -31,8 +31,15 @@ var extractMarketName = function (line) {
     var jsonStart = line.indexOf("{");
     var jsonEnd = line.lastIndexOf("}");
     var json = JSON.parse(line.substring(jsonStart, jsonEnd + 1));
-    var id = json.id;
-    var marketName = id.slice(0, -("-7dc9556a-b09b-4d7b-914d-3435bd7128c0".length));
+    var marketName = "";
+    if (json.id) {
+        var id = json.id;
+        marketName = id.slice(0, -("-7dc9556a-b09b-4d7b-914d-3435bd7128c0".length));
+    } else if (json.origin) {
+        var origin = json.origin;
+        var instance = json.originInstance != "" ? '_' + json.originInstance : "";
+        marketName = origin + instance;
+    }    
     return marketToLabel(marketName);
 };
 
@@ -40,7 +47,6 @@ var extractJSON = function (line) {
     var jsonStart = line.indexOf("{");
     var jsonEnd = line.lastIndexOf("}");
     var json = JSON.parse(line.substring(jsonStart, jsonEnd + 1));
-    console.log(json);
     return json;
 };
 
@@ -79,12 +85,12 @@ var getChart = function (auctionId) {
                 chart.push(marketToLabel(market) + "->Gateway:");
             } else if (line.indexOf('Adserver bid received') >= 0) {
                 var amount = extractAmount(line);
-
                 chart.push("Note over Gateway: " + amount);
             } else if (line.indexOf('Market bid received') >= 0) {
                 var amount = extractAmount(line);
-
-                chart.push("Note over Gateway: " + amount);
+                var market = extractMarketName(line);
+                var index = chart.indexOf(marketToLabel(market) + "->Gateway:");
+                chart.splice(index, 0, "Note over " + market + ":" + amount);
             } else if (line.indexOf('Ad response ready') >= 0) {
                 var duration = extractBetween(line, "(all took PT", ")");
 
@@ -100,6 +106,7 @@ var getChart = function (auctionId) {
                     var el = chart.indexOf('ADSERVER->Gateway:');
                     chart[el] += ' Non Auctionable';
                 }
+                
             }
         });
 
@@ -153,7 +160,6 @@ var getTableInfo = function (auctionId) {
                     var cell = tbl_row.insertCell();
                     var data = jsonPathToValue(marketInfo, val);
                     if (data) {
-                        console.log(marketInfo[val])
                         cell.appendChild(document.createTextNode(JSON.stringify(data)));
                     }
                 })
@@ -245,5 +251,3 @@ $(document).on("DOMNodeInserted", '.line', function () {
         domScanTimer = setTimeout(domScan, 2000);
     }
 });
-
-
